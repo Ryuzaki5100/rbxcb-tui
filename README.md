@@ -306,6 +306,13 @@ Built-in themes:
 - `github-dark`
 - `mono`
 
+### Theme precedence
+
+1. `--theme <name>`
+2. `RBXCB_THEME`
+3. saved `theme` in `config.json`
+4. `gruvbox` fallback
+
 ### Theme picker and persistence
 
 Press `t` or click `[t] Themes` to open the picker.
