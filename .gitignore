@@ -1,0 +1,6 @@
+.devenv/
+.direnv/
+result
+result-*
+bin/
+*.log
