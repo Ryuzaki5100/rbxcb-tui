@@ -193,6 +193,7 @@ rbxcb-tui [flags]
   --no-auto-aspect       disable automatic aspect detection
   --no-color             force the monochrome theme
   --no-hover             disable hover highlighting
+  --no-animation         disable face rotation animation
   --no-mouse             start with mouse capture disabled
   --version              print the version and exit
 ```
@@ -293,8 +294,8 @@ replaces the old one.
 | Panes | `tab` / `shift+tab` | cycle visible panes |
 | Puzzles | `↑`/`↓` or `j`/`k`, `enter` | choose and open a puzzle |
 | Cell cursor | arrows or `h` `j` `k` `l` | move the focused sticker |
-| Face rotation | `ctrl+arrows` or `H` `J` `K` `L` | rotate the cube view |
-| Face cycle | `[` / `]` | yaw the cube view |
+| Look | `ctrl+arrows` or `H` `J` `K` `L` | look left/right/up/down |
+| Look cycle | `[` / `]` | yaw the view |
 | Paint | `w` `y` `r` `o` `b` `g` | paint white/yellow/red/orange/blue/green |
 | Paint current | `space` | repaint the focused sticker |
 | Clear cell | `x` / `backspace` | clear the focused sticker |
@@ -317,13 +318,19 @@ When no puzzle is selected, tab cycles only between Puzzles and Output.
 
 ### Face rotation
 
-The cube uses a real view orientation (`front`, `up`, `right`):
+The arrows are **look** controls:
 
-- `Up` / `Down` pitch the cube ±90°.
-- `Left` / `Right` yaw the cube ±90°.
+- `→` looks at the face on the cube's right.
+- `←` looks at the face on the cube's left.
+- `↑` looks at the top face.
+- `↓` looks at the bottom face.
 - Four presses in any direction return to the starting view.
 - The displayed grid rotates with the view.
 - Painting and playback respect the current orientation.
+
+The cube pane shows `Look` and `Up` labels so the current orientation is always
+visible. Face changes use a short directional wipe animation; the incoming face
+enters from the side you are looking toward.
 
 ## Mouse and hover
 
@@ -450,6 +457,7 @@ from the picker.
 | `mouse` | bool | Start with mouse capture enabled |
 | `cell_aspect` | number | Manual cell aspect (height/width multiplier) |
 | `auto_aspect` | bool | Enable pixel-based auto-detection |
+| `animation` | bool | Enable face rotation animation |
 | `themes` | object | Custom theme definitions |
 
 ### Example
@@ -461,6 +469,7 @@ from the picker.
   "mouse": true,
   "cell_aspect": 1.75,
   "auto_aspect": true,
+  "animation": true,
   "themes": {
     "mine": {
       "accent": "#66d9ef",
@@ -650,6 +659,11 @@ not use background colours, so sticker rendering is stable across terminals.
 Hover requires a terminal that supports all-motion mouse reporting. Clicks still
 work without it. Use `--no-hover` to disable hover and reduce mouse event
 traffic.
+
+### Rotation animation looks flickery
+
+Use `--no-animation` or set `"animation": false` in the config. Rotation still
+works instantly without the wipe transition.
 
 ## Limitations
 

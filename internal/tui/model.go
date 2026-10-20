@@ -36,6 +36,7 @@ type Options struct {
 	Theme        string
 	CellAspect   float64
 	NoAutoAspect bool
+	NoAnimation  bool
 	Facelets     string
 	Scramble     string
 	Stage        solver.Stage
@@ -72,12 +73,16 @@ type Model struct {
 	themeCursor      int
 	themeScroll      int
 
-	config     Config
-	theme      Theme
-	styles     Styles
-	themes     []Theme
-	themeIndex int
-	cellAspect float64
+	config       Config
+	theme        Theme
+	styles       Styles
+	themes       []Theme
+	themeIndex   int
+	cellAspect   float64
+	animEnabled  bool
+	animGen      int
+	rotation     rotationAnimation
+	lastScramble time.Time
 
 	status   string
 	errMsg   string
@@ -90,6 +95,18 @@ type Model struct {
 	hits       []Hit
 	pendingCmd tea.Cmd
 }
+
+type rotationAnimation struct {
+	Active bool
+	Dir    int
+	Frame  int
+	From   [9]Color
+	To     [9]Color
+	Front  int
+	Up     int
+}
+
+type rotationTickMsg struct{ gen int }
 
 type solveDoneMsg struct {
 	gen     int
@@ -158,6 +175,11 @@ func New(opts Options) Model {
 		aspectSource = "default"
 	}
 
+	animEnabled := !opts.NoAnimation
+	if cfg.Animation != nil {
+		animEnabled = *cfg.Animation && !opts.NoAnimation
+	}
+
 	hoverEnabled := !opts.NoHover
 	if cfg.Hover != nil {
 		hoverEnabled = *cfg.Hover && !opts.NoHover
@@ -184,6 +206,7 @@ func New(opts Options) Model {
 		themes:         themes,
 		themeIndex:     idx,
 		cellAspect:     aspect,
+		animEnabled:    animEnabled,
 	}
 	switch {
 	case cfgErr != nil:
@@ -253,6 +276,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSolveDone(msg)
 	case tickMsg:
 		return m.handleTick(msg)
+	case rotationTickMsg:
+		return m.handleRotationTick(msg)
 	}
 	return m, nil
 }
@@ -378,6 +403,7 @@ func (m *Model) handlePuzzleKey(msg tea.KeyPressMsg) {
 }
 
 func (m *Model) handleEditorKey(msg tea.KeyPressMsg) {
+	m.finishRotation()
 	m.showPlayback = false
 	m.solution.Playing = false
 	s := msg.String()
@@ -391,17 +417,17 @@ func (m *Model) handleEditorKey(msg tea.KeyPressMsg) {
 	case key.Matches(msg, m.keys.Right):
 		m.editor.MoveCell(0, 1)
 	case key.Matches(msg, m.keys.FaceUp):
-		m.editor.MoveFace(0)
+		m.rotateView(0)
 	case key.Matches(msg, m.keys.FaceDown):
-		m.editor.MoveFace(1)
+		m.rotateView(1)
 	case key.Matches(msg, m.keys.FaceLeft):
-		m.editor.MoveFace(2)
+		m.rotateView(2)
 	case key.Matches(msg, m.keys.FaceRight):
-		m.editor.MoveFace(3)
+		m.rotateView(3)
 	case key.Matches(msg, m.keys.NextFace):
-		m.editor.MoveFace(3)
+		m.rotateView(3)
 	case key.Matches(msg, m.keys.PrevFace):
-		m.editor.MoveFace(2)
+		m.rotateView(2)
 	case key.Matches(msg, m.keys.Paint):
 		m.editor.Paint(m.editor.Current)
 	case key.Matches(msg, m.keys.Clear):
@@ -467,6 +493,7 @@ func (m *Model) handleOutputKey(msg tea.KeyPressMsg) {
 }
 
 func (m *Model) selectPuzzle(index int) {
+	m.finishRotation()
 	if index < 0 || index >= len(pickerOptions) {
 		return
 	}
@@ -592,6 +619,7 @@ func (m *Model) togglePlaybackView() {
 }
 
 func (m *Model) clearCube() {
+	m.finishRotation()
 	if m.selectedPuzzle < 0 {
 		return
 	}
@@ -601,10 +629,113 @@ func (m *Model) clearCube() {
 	m.status = "cleared cube input"
 }
 
+func (m *Model) finishRotation() {
+	if m.rotation.Active {
+		m.rotation.Active = false
+		m.animGen++
+	}
+}
+
+func (m *Model) rotateView(dir int) {
+	if !m.animEnabled {
+		m.editor.MoveFace(dir)
+		return
+	}
+	fromFaces, _ := m.displayFaces()
+	from := orientedGrid(fromFaces, m.editor.Face, m.editor.Up)
+	m.editor.MoveFace(dir)
+	toFaces, _ := m.displayFaces()
+	to := orientedGrid(toFaces, m.editor.Face, m.editor.Up)
+	m.animGen++
+	m.rotation = rotationAnimation{
+		Active: true,
+		Dir:    dir,
+		Frame:  0,
+		From:   from,
+		To:     to,
+		Front:  m.editor.Face,
+		Up:     m.editor.Up,
+	}
+	gen := m.animGen
+	m.pendingCmd = tea.Tick(40*time.Millisecond, func(time.Time) tea.Msg {
+		return rotationTickMsg{gen: gen}
+	})
+}
+
+func (m Model) handleRotationTick(msg rotationTickMsg) (tea.Model, tea.Cmd) {
+	if !m.rotation.Active || msg.gen != m.animGen {
+		return m, nil
+	}
+	if m.rotation.Frame >= 3 {
+		m.rotation.Active = false
+		return m, nil
+	}
+	m.rotation.Frame++
+	return m, tea.Tick(40*time.Millisecond, func(time.Time) tea.Msg {
+		return rotationTickMsg{gen: msg.gen}
+	})
+}
+
+func orientedGrid(faces [6][9]Color, front, up int) [9]Color {
+	var g [9]Color
+	for i := 0; i < 9; i++ {
+		g[i] = orientedColor(faces, front, up, i)
+	}
+	return g
+}
+
+func (m Model) displayedGrid(faces [6][9]Color) ([9]Color, bool) {
+	if !m.rotation.Active {
+		return orientedGrid(faces, m.editor.Face, m.editor.Up), false
+	}
+	out := m.rotation.From
+	step := m.rotation.Frame
+	if step > 3 {
+		step = 3
+	}
+	for r := 0; r < 3; r++ {
+		for c := 0; c < 3; c++ {
+			useNew := false
+			switch m.rotation.Dir {
+			case 0: // look up: new enters from top
+				useNew = r < step
+			case 1: // look down: new enters from bottom
+				useNew = r >= 3-step
+			case 2: // look left: new enters from left
+				useNew = c < step
+			case 3: // look right: new enters from right
+				useNew = c >= 3-step
+			}
+			if useNew {
+				out[r*3+c] = m.rotation.To[r*3+c]
+			}
+		}
+	}
+	return out, true
+}
+
+func rotationDirectionName(dir int) string {
+	switch dir {
+	case 0:
+		return "look up"
+	case 1:
+		return "look down"
+	case 2:
+		return "look left"
+	default:
+		return "look right"
+	}
+}
+
 func (m *Model) loadRandomScramble() {
 	if m.selectedPuzzle < 0 {
 		return
 	}
+	if !m.lastScramble.IsZero() && time.Since(m.lastScramble) < 200*time.Millisecond {
+		return
+	}
+	m.lastScramble = time.Now()
+	m.finishRotation()
 	rng := rand.New(rand.NewPCG(uint64(time.Now().UnixNano()), 0x9e3779b97f4a7c15))
 	if err := m.editor.LoadScramble(RandomScramble(rng, 20)); err != nil {
 		m.errMsg = err.Error()
@@ -1005,6 +1136,7 @@ func (m Model) renderCubePane(l appLayout) string {
 	g := l.cubeGeom
 	e := &m.editor
 	faces, playback := m.displayFaces()
+	grid, animating := m.displayedGrid(faces)
 	put := func(absY int, s string) {
 		rel := absY - g.inner.y
 		if rel >= 0 && rel < len(lines) {
@@ -1012,18 +1144,22 @@ func (m Model) renderCubePane(l appLayout) string {
 		}
 	}
 	centers, centersOK := e.Centers()
-	centerName := orientedColor(faces, e.Face, e.Up, 4).Name()
+	centerName := grid[4].Name()
 	title := m.styles.Title.Render(pickerOptions[m.selectedPuzzle].label) +
 		m.styles.Subtle.Render(fmt.Sprintf("  ·  Face %s (%d/6)  ·  center %s", string(faceOrder[e.Face]), e.Face+1, centerName))
 	if m.styles.Mono && m.focus == FocusCube {
 		title = m.styles.Title.Render("▸ ") + title
 	}
+	title += m.styles.Subtle.Render(fmt.Sprintf("  ·  Look %s · Up %s", string(faceOrder[e.Face]), string(faceOrder[e.Up])))
 	if playback {
 		badge := fmt.Sprintf("  ·  PLAYBACK %d/%d", m.solution.Step, len(m.solution.Moves))
 		if m.solution.Step >= len(m.solution.Moves) {
 			badge = "  ·  SOLVED"
 		}
 		title += m.styles.Success.Render(badge)
+	}
+	if animating {
+		title += m.styles.Selected.Render("  ·  " + rotationDirectionName(m.rotation.Dir))
 	}
 	title = ansi.Truncate(title, g.inner.w, "…")
 	put(g.titleY, lipgloss.PlaceHorizontal(g.inner.w, lipgloss.Center, title))
@@ -1035,7 +1171,7 @@ func (m Model) renderCubePane(l appLayout) string {
 		for c := 0; c < 3; c++ {
 			idx := r*3 + c
 			hovered := m.hoverEnabled && m.hover.ID == fmt.Sprintf("cell:%d:%d", r, c)
-			cells[c] = m.cellLines(orientedColor(faces, e.Face, e.Up, idx), !playback && idx == e.Cell, hovered, g.cellW)
+			cells[c] = m.cellLines(grid[idx], !playback && idx == e.Cell, hovered, g.cellW)
 		}
 		for lineIdx := 0; lineIdx < g.cellH; lineIdx++ {
 			parts := make([]string, 3)

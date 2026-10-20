@@ -21,6 +21,7 @@ func main() {
 		theme    = flag.String("theme", "", "theme name (see --list-themes)")
 		aspect   = flag.Float64("cell-aspect", 0, "terminal character aspect ratio (auto by default)")
 		noAuto   = flag.Bool("no-auto-aspect", false, "disable automatic cell aspect detection")
+		noAnim   = flag.Bool("no-animation", false, "disable face rotation animation")
 		list     = flag.Bool("list-themes", false, "list available themes and exit")
 		facelets = flag.String("facelets", "", "load a 54-character cube state")
 		scramble = flag.String("scramble", "", "apply a scramble such as \"R U R' U'\"")
@@ -53,6 +54,7 @@ func main() {
 		Theme:        *theme,
 		CellAspect:   *aspect,
 		NoAutoAspect: *noAuto,
+		NoAnimation:  *noAnim,
 		Facelets:     *facelets,
 		Scramble:     *scramble,
 		Stage:        solver.Stage(*stage),

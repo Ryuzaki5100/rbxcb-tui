@@ -152,12 +152,13 @@ func (m Model) handleMouseClick(mouse tea.Mouse) (tea.Model, tea.Cmd) {
 				m.status = pickerOptions[h.Puzzle].label + " is not supported yet"
 			}
 		case HitCell:
+			m.finishRotation()
 			m.showPlayback = false
 			m.solution.Playing = false
 			m.editor.Cell = h.Cell
 			m.editor.PaintAt(h.Cell, m.editor.Current)
 		case HitFaceArrow:
-			m.editor.MoveFace(h.Direction)
+			m.rotateView(h.Direction)
 		case HitPalette:
 			m.editor.Current = h.Color
 		case HitAction:
@@ -193,6 +194,7 @@ func (m Model) handleMouseMotion(mouse tea.Mouse) (tea.Model, tea.Cmd) {
 		for _, h := range m.hits {
 			if h.Kind == HitCell && h.Rect.contains(mouse.X, mouse.Y) {
 				m.focus = FocusCube
+				m.finishRotation()
 				m.showPlayback = false
 				m.solution.Playing = false
 				m.hover = hoverTarget{Kind: HitCell, ID: h.ID}

@@ -1609,3 +1609,208 @@ func TestClickWhereRightPaneWouldBeDoesNothing(t *testing.T) {
 		t.Fatal("puzzle selected by background click")
 	}
 }
+
+func TestScramblePreservesViewOrientation(t *testing.T) {
+	m := sampleModel(t)
+	m.editor.SetFace(2)  // F/U
+	m.editor.MoveFace(3) // look right -> R/U
+	m.editor.Cell = 5
+	face, up := m.editor.Face, m.editor.Up
+	m.loadRandomScramble()
+	if m.editor.Face != face || m.editor.Up != up {
+		t.Fatalf("orientation reset to %d/%d, want %d/%d", m.editor.Face, m.editor.Up, face, up)
+	}
+	if m.editor.Cell != 5 {
+		t.Fatalf("cell cursor reset to %d", m.editor.Cell)
+	}
+}
+
+func TestArrowAfterScrambleDoesNotChangeFacelets(t *testing.T) {
+	m := sampleModel(t)
+	m.loadRandomScramble()
+	before, _ := m.editor.FaceletsString()
+	m.focus = FocusCube
+	updated, _ := m.Update(press("right"))
+	m = updated.(Model)
+	after, _ := m.editor.FaceletsString()
+	if before != after {
+		t.Fatal("right arrow changed the scramble")
+	}
+}
+
+func TestRightArrowHitboxDoesNotOverlapScramble(t *testing.T) {
+	m := sampleModel(t)
+	m.rebuildHits()
+	var arrow Hit
+	var scramble Hit
+	for _, h := range m.hits {
+		if h.Kind == HitFaceArrow && h.Direction == 3 {
+			arrow = h
+		}
+		if h.Kind == HitAction && h.Action == actionScramble {
+			scramble = h
+		}
+	}
+	if arrow.Rect.w == 0 || scramble.Rect.w == 0 {
+		t.Fatal("missing hitbox")
+	}
+	if arrow.Rect.x < scramble.Rect.x+scramble.Rect.w && arrow.Rect.x+arrow.Rect.w > scramble.Rect.x &&
+		arrow.Rect.y < scramble.Rect.y+scramble.Rect.h && arrow.Rect.y+arrow.Rect.h > scramble.Rect.y {
+		t.Fatal("right-arrow hitbox overlaps scramble button")
+	}
+}
+
+func TestScrambleDebounce(t *testing.T) {
+	m := sampleModel(t)
+	m.loadRandomScramble()
+	first, _ := m.editor.FaceletsString()
+	m.loadRandomScramble()
+	second, _ := m.editor.FaceletsString()
+	if first != second {
+		t.Fatal("second scramble was not debounced")
+	}
+}
+
+func TestRotationAnimationDirections(t *testing.T) {
+	cases := []struct {
+		dir      int
+		newCells []int
+	}{
+		{0, []int{0, 1, 2}},
+		{1, []int{6, 7, 8}},
+		{2, []int{0, 3, 6}},
+		{3, []int{2, 5, 8}},
+	}
+	for _, tc := range cases {
+		m := sampleModel(t)
+		m.editor.SetFace(2)
+		m.rotateView(tc.dir)
+		if !m.rotation.Active {
+			t.Fatalf("dir %d: animation not active", tc.dir)
+		}
+		m.rotation.Frame = 1
+		grid, animating := m.displayedGrid(m.editor.Faces)
+		if !animating {
+			t.Fatalf("dir %d: not animating", tc.dir)
+		}
+		isNew := map[int]bool{}
+		for _, i := range tc.newCells {
+			isNew[i] = true
+		}
+		for i := 0; i < 9; i++ {
+			if isNew[i] && grid[i] != m.rotation.To[i] {
+				t.Fatalf("dir %d cell %d should be new", tc.dir, i)
+			}
+			if !isNew[i] && grid[i] != m.rotation.From[i] {
+				t.Fatalf("dir %d cell %d should be old", tc.dir, i)
+			}
+		}
+	}
+}
+
+func TestRotationAnimationCompletes(t *testing.T) {
+	m := sampleModel(t)
+	m.rotateView(3)
+	gen := m.animGen
+	for i := 0; i < 4; i++ {
+		updated, _ := m.handleRotationTick(rotationTickMsg{gen: gen})
+		m = updated.(Model)
+	}
+	if m.rotation.Active {
+		t.Fatal("animation did not complete")
+	}
+	grid, _ := m.displayedGrid(m.editor.Faces)
+	for i := 0; i < 9; i++ {
+		if grid[i] != m.rotation.To[i] {
+			t.Fatalf("final cell %d = %v, want %v", i, grid[i], m.rotation.To[i])
+		}
+	}
+}
+
+func TestRotationAnimationDoesNotChangeFacelets(t *testing.T) {
+	m := sampleModel(t)
+	before, _ := m.editor.FaceletsString()
+	m.rotateView(3)
+	after, _ := m.editor.FaceletsString()
+	if before != after {
+		t.Fatal("rotation animation changed facelets")
+	}
+}
+
+func TestNewRotationInterruptsPrevious(t *testing.T) {
+	m := sampleModel(t)
+	m.rotateView(3)
+	firstGen := m.animGen
+	m.rotateView(3)
+	if m.animGen <= firstGen {
+		t.Fatal("animation generation did not advance")
+	}
+	m.rotation.Frame = 1
+	updated, _ := m.handleRotationTick(rotationTickMsg{gen: firstGen})
+	m = updated.(Model)
+	if !m.rotation.Active {
+		t.Fatal("stale animation tick cancelled the new animation")
+	}
+}
+
+func TestScrambleCancelsAnimation(t *testing.T) {
+	m := sampleModel(t)
+	m.rotateView(3)
+	if !m.rotation.Active {
+		t.Fatal("animation not active")
+	}
+	m.loadRandomScramble()
+	if m.rotation.Active {
+		t.Fatal("scramble did not cancel animation")
+	}
+}
+
+func TestMouseArrowStartsAnimation(t *testing.T) {
+	m := sampleModel(t)
+	m.rebuildHits()
+	var arrow Hit
+	for _, h := range m.hits {
+		if h.Kind == HitFaceArrow && h.Direction == 3 {
+			arrow = h
+		}
+	}
+	updated, _ := m.handleMouseClick(tea.Mouse{X: arrow.Rect.x, Y: arrow.Rect.y, Button: tea.MouseLeft})
+	m = updated.(Model)
+	if !m.rotation.Active {
+		t.Fatal("mouse arrow did not start animation")
+	}
+}
+
+func TestNoAnimationFlag(t *testing.T) {
+	m := sized(t, New(Options{Facelets: sample, NoAnimation: true, NoAutoAspect: true}))
+	before := m.editor.Face
+	m.rotateView(3)
+	if m.rotation.Active {
+		t.Fatal("animation active with --no-animation")
+	}
+	if m.editor.Face == before {
+		t.Fatal("rotation did not apply")
+	}
+}
+
+func TestMouseArrowAfterScrambleDoesNotChangeFacelets(t *testing.T) {
+	m := sampleModel(t)
+	m.loadRandomScramble()
+	before, _ := m.editor.FaceletsString()
+	m.rebuildHits()
+	var arrow Hit
+	for _, h := range m.hits {
+		if h.Kind == HitFaceArrow && h.Direction == 3 {
+			arrow = h
+		}
+	}
+	updated, _ := m.handleMouseClick(tea.Mouse{X: arrow.Rect.x, Y: arrow.Rect.y, Button: tea.MouseLeft})
+	m = updated.(Model)
+	after, _ := m.editor.FaceletsString()
+	if before != after {
+		t.Fatal("right arrow click changed the scramble")
+	}
+	if !m.rotation.Active {
+		t.Fatal("right arrow click did not start animation")
+	}
+}

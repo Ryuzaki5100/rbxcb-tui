@@ -194,8 +194,12 @@ func (e *Editor) LoadFacelets(s string) error {
 	if len(s) != 54 {
 		return fmt.Errorf("facelets must contain 54 characters")
 	}
-	var next Editor
-	next.Current = e.Current
+	next := Editor{
+		Current: e.Current,
+		Face:    e.Face,
+		Up:      e.Up,
+		Cell:    e.Cell,
+	}
 	for f := 0; f < 6; f++ {
 		for c := 0; c < 9; c++ {
 			color, ok := colorFromLetter(s[f*9+c])
@@ -204,6 +208,9 @@ func (e *Editor) LoadFacelets(s string) error {
 			}
 			next.Faces[f][c] = color
 		}
+	}
+	if orientationIndex[next.Face][next.Up][0] < 0 {
+		next.Up = defaultUp(next.Face)
 	}
 	*e = next
 	return nil

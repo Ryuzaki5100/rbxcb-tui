@@ -35,6 +35,7 @@ type Config struct {
 	Mouse      *bool                  `json:"mouse,omitempty"`
 	CellAspect float64                `json:"cell_aspect,omitempty"`
 	AutoAspect *bool                  `json:"auto_aspect,omitempty"`
+	Animation  *bool                  `json:"animation,omitempty"`
 	Themes     map[string]ThemeConfig `json:"themes,omitempty"`
 }
 
