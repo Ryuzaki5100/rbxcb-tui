@@ -1,0 +1,46 @@
+name: publish-aur
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag"
+        required: true
+      publish:
+        description: "Actually publish to AUR"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: ${{ inputs.publish && vars.ENABLE_AUR == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Prepare PKGBUILD
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          version="${TAG#v}"
+          url="https://github.com/Ryuzaki5100/rbxcb-tui/archive/refs/tags/${TAG}.tar.gz"
+          curl -fsSL "$url" -o source.tar.gz
+          sha=$(sha256sum source.tar.gz | cut -d' ' -f1)
+          mkdir -p aur
+          sed -e "s/__VERSION__/${version}/g" -e "s/__SHA256__/${sha}/g" packaging/aur/PKGBUILD > aur/PKGBUILD
+          cd aur
+          makepkg --printsrcinfo > .SRCINFO
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3
+        with:
+          pkgname: rbxcb-tui
+          pkgbuild: aur/PKGBUILD
+          assets: aur/.SRCINFO
+          commit_username: Ryuzaki5100
+          commit_email: Ryuzaki5100@users.noreply.github.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "rbxcb-tui ${{ inputs.tag }}"

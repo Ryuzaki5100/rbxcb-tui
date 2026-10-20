@@ -1,0 +1,33 @@
+name: publish-snap
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag"
+        required: true
+      publish:
+        description: "Publish to the Snap Store"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: ${{ inputs.publish && vars.ENABLE_SNAP == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: snapcore/action-build@v1
+        id: build
+        with:
+          path: .
+      - uses: snapcore/action-publish@v1
+        with:
+          store_login: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          snap: ${{ steps.build.outputs.snap }}
+          release: stable

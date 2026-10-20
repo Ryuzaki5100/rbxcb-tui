@@ -161,7 +161,7 @@ func (f Facelets) IsSolved() bool {
 	return true
 }
 
-// ParseFacelets parses the 54-character color input used by the Java backend.
+// ParseFacelets parses the 54-character colour input used by the solver.
 func ParseFacelets(input string) (Cube, error) {
 	input = strings.ToLower(strings.TrimSpace(input))
 	if len(input) != 54 {

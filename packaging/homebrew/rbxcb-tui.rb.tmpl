@@ -1,0 +1,24 @@
+class RbxcbTui < Formula
+  desc "A terminal UI for solving 3x3x3 Rubik's cubes"
+  homepage "https://github.com/Ryuzaki5100/rbxcb-tui"
+  version "__VERSION__"
+  license "MIT"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/Ryuzaki5100/rbxcb-tui/releases/download/v#{version}/rbxcb-tui_#{version}_darwin_arm64.tar.gz"
+      sha256 "__DARWIN_ARM64_SHA256__"
+    else
+      url "https://github.com/Ryuzaki5100/rbxcb-tui/releases/download/v#{version}/rbxcb-tui_#{version}_darwin_amd64.tar.gz"
+      sha256 "__DARWIN_AMD64_SHA256__"
+    end
+  end
+
+  def install
+    bin.install "rbxcb-tui"
+  end
+
+  test do
+    system "#{bin}/rbxcb-tui", "--version"
+  end
+end

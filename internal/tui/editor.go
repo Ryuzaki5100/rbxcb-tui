@@ -159,7 +159,7 @@ func (e *Editor) Centers() ([6]Color, bool) {
 }
 
 // FaceletsString serializes the editor in the U,L,F,R,B,D row-major order
-// expected by the Java backend.
+// expected by the solver and facelet parser.
 func (e *Editor) FaceletsString() (string, error) {
 	if e.Filled() != 54 {
 		return "", fmt.Errorf("fill all 54 cells (%d/54 done)", e.Filled())

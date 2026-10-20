@@ -3,9 +3,8 @@
 A terminal UI for entering a 3x3x3 Rubik's cube by colour and solving it with
 2-stage, 3-stage, or 4-stage algorithms.
 
-The solver is a pure-Go port of the Java reference implementation in
-[`Ryuzaki5100/rbxcb`](https://github.com/Ryuzaki5100/rbxcb), so the TUI needs no
-JVM, no HTTP server, and no network access.
+The solver is implemented entirely in Go, so the TUI needs no external runtime,
+HTTP server, or network access.
 
 ```text
 ┌ Puzzles ──────┬─ Cube ─────────────────────────────┬─ Actions ──────────┐
@@ -32,14 +31,14 @@ JVM, no HTTP server, and no network access.
 - [Facelet order](#facelet-order)
 - [Architecture](#architecture)
 - [Testing](#testing)
-- [Java parity fixtures](#java-parity-fixtures)
+- [Regression fixtures](#regression-fixtures)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
 - [Limitations](#limitations)
 
 ## Features
 
-- Pure-Go 3x3x3 engine with no runtime dependency on Java.
+- Pure-Go 3x3x3 engine with no external runtime dependency.
 - 2-stage, 3-stage, and 4-stage staged solvers.
 - CFOP OLL/PLL solvers in the Go library.
 - Interactive colour picker with square, theme-bordered colour chips.
@@ -94,6 +93,89 @@ Build a local binary:
 
 ```bash
 just build          # ./bin/rbxcb-tui
+```
+
+## Installation
+
+### Debian / Ubuntu
+
+Download the latest `.deb` from GitHub Releases:
+
+```bash
+sudo apt install ./rbxcb-tui_0.1.0_linux_amd64.deb
+```
+
+ARM64 packages are published alongside amd64.
+
+### Arch Linux
+
+Install from the AUR after the package is published:
+
+```bash
+yay -S rbxcb-tui
+# or
+paru -S rbxcb-tui
+```
+
+### NixOS
+
+Run directly from the flake:
+
+```bash
+nix run github:Ryuzaki5100/rbxcb-tui
+```
+
+Install into a profile:
+
+```bash
+nix profile install github:Ryuzaki5100/rbxcb-tui
+```
+
+NixOS configuration:
+
+```nix
+inputs.rbxcb-tui.url = "github:Ryuzaki5100/rbxcb-tui";
+```
+
+Then add the package to `environment.systemPackages`.
+
+### Fedora
+
+Once the COPR project is enabled:
+
+```bash
+sudo dnf copr enable ryuzaki5100/rbxcb-tui
+sudo dnf install rbxcb-tui
+```
+
+### Snap
+
+```bash
+sudo snap install rbxcb-tui --classic
+```
+
+### macOS
+
+```bash
+brew tap Ryuzaki5100/tap
+brew install rbxcb-tui
+```
+
+Notarized releases are used when macOS signing credentials are configured. If
+not, Gatekeeper may require manual approval.
+
+### Windows
+
+Download the Windows archive from GitHub Releases, extract it, and run
+`rbxcb-tui.exe` from Windows Terminal. Package-manager integration is not
+available yet.
+
+### Build from source
+
+```bash
+git clone https://github.com/Ryuzaki5100/rbxcb-tui.git
+cd rbxcb-tui
+go build -trimpath -o rbxcb-tui ./cmd/rbxcb-tui
 ```
 
 ## CLI reference
@@ -415,7 +497,7 @@ changes.
 
 ## Facelet order
 
-Input is serialized as 54 characters in the same order as the Java backend:
+Input is serialized as 54 characters in this face order:
 
 ```text
 U L F R B D
@@ -446,7 +528,7 @@ internal/tui           Bubble Tea workspace, editor, actions, output, themes
 internal/tui/layout.go pane geometry shared by rendering and mouse hit testing
 internal/tui/orientation.go  3D view-orientation tables
 e2e                    randomized solver end-to-end tests
-testdata               Java-generated parity fixtures
+testdata               committed regression fixtures
 ```
 
 Key design points:
@@ -454,8 +536,8 @@ Key design points:
 - Cubie state uses fixed arrays for fast BFS expansion.
 - Masks use comparable fixed-size keys.
 - Bidirectional stage search supports cancellation and limits.
-- Facelet parsing, move semantics, and rendering are verified against Java
-  fixtures.
+- Facelet parsing, move semantics, and rendering are verified against
+  committed regression fixtures.
 - Rendering, hitboxes, and mouse mapping all share one layout calculation.
 - The cube view uses `(front, up)` orientation with precomputed cell mappings.
 
@@ -487,25 +569,18 @@ The randomized E2E suite:
 
 CI runs unit tests, race tests, and a randomized E2E batch.
 
-## Java parity fixtures
+## Regression fixtures
 
-The Go engine is validated against the sibling Java implementation.
+`testdata/fixtures.json` contains committed golden data used to verify that the
+move engine, facelet parser, and cube rendering remain stable.
 
-Regenerate fixtures:
+The fixture set includes solved and scrambled facelets, all 18 moves, and
+deterministic scrambles. It is updated intentionally when solver semantics or
+facelet conventions change:
 
 ```bash
-cd ../rbxcb
-devenv shell -- fixtures
+go test ./internal/cube -run Fixture -v
 ```
-
-This writes:
-
-```text
-../rbxcb-tui/testdata/java_fixtures.json
-```
-
-The fixture set includes solved/state facelets, all 18 moves, and deterministic
-scrambles.
 
 ## Development
 
@@ -529,6 +604,16 @@ The devenv environment provides:
 - `just`
 
 `nix build` builds the app as a flake package; `nix run .` runs it directly.
+
+## Releasing
+
+Release automation is documented in [`docs/RELEASING.md`](docs/RELEASING.md).
+The active release workflow builds cross-platform archives and a `.deb` for
+every `v*` tag. The repository-side `update-project` skill at
+`.opencode/skills/update-project/SKILL.md` handles release-note updates and
+rebuild/re-upload workflows. AUR, Homebrew, Fedora COPR, Snap, and a future
+signed apt repository have disabled/manual workflows that can be enabled with
+repository variables and credentials.
 
 ## Troubleshooting
 
@@ -570,6 +655,9 @@ traffic.
 
 - Only **3x3x3** is supported.
 - `4x4x4` and `2x2x2` entries are visible but disabled.
-- The Java 4x4x4 implementation in the reference repository is incomplete.
 - Random 2-stage solves can take noticeably longer than 3-stage or 4-stage.
 - The TUI is keyboard/mouse oriented; there is no image upload or camera input.
+
+## License
+
+MIT License. See [`LICENSE`](LICENSE).

@@ -27,7 +27,7 @@ type fixtures struct {
 
 func loadFixtures(t *testing.T) fixtures {
 	t.Helper()
-	raw, err := os.ReadFile("../../testdata/java_fixtures.json")
+	raw, err := os.ReadFile("../../testdata/fixtures.json")
 	if err != nil {
 		t.Fatalf("read fixtures: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestParseSolvedFacelets(t *testing.T) {
 	}
 }
 
-func TestMoveEngineMatchesJavaFixtures(t *testing.T) {
+func TestMoveEngineMatchesFixtures(t *testing.T) {
 	f := loadFixtures(t)
 	for notation, want := range f.Moves {
 		moves, err := ParseNotation(notation)
@@ -88,7 +88,7 @@ func TestMoveEngineMatchesJavaFixtures(t *testing.T) {
 	}
 }
 
-func TestScramblesMatchJavaFixtures(t *testing.T) {
+func TestScramblesMatchFixtures(t *testing.T) {
 	f := loadFixtures(t)
 	for _, sc := range f.Scrambles {
 		moves, err := ParseNotation(sc.Moves)

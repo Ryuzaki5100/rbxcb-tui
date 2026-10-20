@@ -1,0 +1,75 @@
+version: 2
+
+project_name: rbxcb-tui
+
+before:
+  hooks:
+    - go mod verify
+
+builds:
+  - id: rbxcb-tui
+    main: ./cmd/rbxcb-tui
+    binary: rbxcb-tui
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: archives
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+nfpms:
+  - id: deb
+    package_name: rbxcb-tui
+    formats:
+      - deb
+    vendor: Ryuzaki5100
+    homepage: https://github.com/Ryuzaki5100/rbxcb-tui
+    maintainer: Ryuzaki5100 <Ryuzaki5100@users.noreply.github.com>
+    description: A terminal UI for solving 3x3x3 Rubik's cubes
+    license: MIT
+    section: utils
+    priority: optional
+    bindir: /usr/bin
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/rbxcb-tui/copyright
+      - src: README.md
+        dst: /usr/share/doc/rbxcb-tui/README.md
+
+release:
+  github:
+    owner: Ryuzaki5100
+    name: rbxcb-tui
+  draft: false
+  prerelease: auto
+  name_template: "rbxcb-tui {{.Version}}"

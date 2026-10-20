@@ -1,0 +1,28 @@
+name: rbxcb-tui
+base: core24
+version: git
+summary: A terminal UI for solving 3x3x3 Rubik's cubes
+description: |
+  A keyboard- and mouse-driven terminal application for entering and solving
+  3x3x3 Rubik's cubes with 2-stage, 3-stage, and 4-stage solvers.
+grade: stable
+confinement: classic
+
+apps:
+  rbxcb-tui:
+    command: bin/rbxcb-tui
+
+parts:
+  rbxcb-tui:
+    plugin: go
+    source: .
+    build-snaps:
+      - go/1.27/stable
+    build-environment:
+      - CGO_ENABLED: "0"
+    override-build: |
+      go build -mod=vendor -trimpath \
+        -ldflags "-s -w -X main.version=${SNAPCRAFT_PROJECT_VERSION}" \
+        -o "${SNAPCRAFT_PART_INSTALL}/bin/rbxcb-tui" ./cmd/rbxcb-tui
+    prime:
+      - bin/rbxcb-tui

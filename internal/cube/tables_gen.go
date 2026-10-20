@@ -1,6 +1,6 @@
 package cube
 
-// Code generated from the Java reference implementation. DO NOT EDIT.
+// Code generated from the reference move tables. DO NOT EDIT.
 
 var faceOrder = [6]byte{'U', 'L', 'F', 'R', 'B', 'D'}
 

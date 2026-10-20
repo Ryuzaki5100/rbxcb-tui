@@ -1,0 +1,47 @@
+name: publish-copr
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag"
+        required: true
+      publish:
+        description: "Build in Fedora COPR"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: ${{ inputs.publish && vars.ENABLE_COPR == 'true' }}
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Install tools
+        run: dnf install -y copr-cli rpm-build golang git tar
+      - name: Configure COPR
+        run: |
+          mkdir -p ~/.config
+          printf '[copr-cli]\nusername=%s\ntoken=%s\ncopr_url=https://copr.fedorainfracloud.org/api\n' "$COPR_LOGIN" "$COPR_API_TOKEN" > ~/.config/copr
+        env:
+          COPR_LOGIN: ${{ secrets.COPR_LOGIN }}
+          COPR_API_TOKEN: ${{ secrets.COPR_API_TOKEN }}
+      - name: Build SRPM
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          version="${TAG#v}"
+          mkdir -p "$HOME/rpmbuild/SOURCES" "$HOME/rpmbuild/SPECS"
+          curl -fsSL "https://github.com/Ryuzaki5100/rbxcb-tui/archive/refs/tags/${TAG}.tar.gz" -o "$HOME/rpmbuild/SOURCES/rbxcb-tui-${version}.tar.gz"
+          sed "s/__VERSION__/${version}/g" packaging/rpm/rbxcb-tui.spec > "$HOME/rpmbuild/SPECS/rbxcb-tui.spec"
+          rpmbuild -bs "$HOME/rpmbuild/SPECS/rbxcb-tui.spec"
+      - name: Trigger COPR
+        run: |
+          srpm="$(find "$HOME/rpmbuild/SRPMS" -name '*.src.rpm' -print -quit)"
+          copr-cli build ryuzaki5100/rbxcb-tui "$srpm"

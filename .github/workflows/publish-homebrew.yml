@@ -1,0 +1,50 @@
+name: publish-homebrew
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag"
+        required: true
+      publish:
+        description: "Update the Homebrew tap"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: ${{ inputs.publish && vars.ENABLE_HOMEBREW == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update tap formula
+        env:
+          TAG: ${{ inputs.tag }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$HOMEBREW_TAP_TOKEN"
+          version="${TAG#v}"
+          base="https://github.com/Ryuzaki5100/rbxcb-tui/releases/download/${TAG}"
+          tmp="$(mktemp -d)"
+          curl -fsSL "${base}/rbxcb-tui_${version}_darwin_amd64.tar.gz" -o "${tmp}/amd64.tar.gz"
+          curl -fsSL "${base}/rbxcb-tui_${version}_darwin_arm64.tar.gz" -o "${tmp}/arm64.tar.gz"
+          sha_amd64="$(sha256sum "${tmp}/amd64.tar.gz" | cut -d' ' -f1)"
+          sha_arm64="$(sha256sum "${tmp}/arm64.tar.gz" | cut -d' ' -f1)"
+          sed \
+            -e "s/__VERSION__/${version}/g" \
+            -e "s/__DARWIN_AMD64_SHA256__/${sha_amd64}/g" \
+            -e "s/__DARWIN_ARM64_SHA256__/${sha_arm64}/g" \
+            packaging/homebrew/rbxcb-tui.rb.tmpl > "${tmp}/rbxcb-tui.rb"
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/Ryuzaki5100/homebrew-tap.git" "${tmp}/tap"
+          mkdir -p "${tmp}/tap/Formula"
+          cp "${tmp}/rbxcb-tui.rb" "${tmp}/tap/Formula/rbxcb-tui.rb"
+          cd "${tmp}/tap"
+          git config user.name "Ryuzaki5100"
+          git config user.email "Ryuzaki5100@users.noreply.github.com"
+          git add Formula/rbxcb-tui.rb
+          git commit -m "rbxcb-tui ${version}" || true
+          git push
